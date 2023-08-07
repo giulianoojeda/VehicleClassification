@@ -3,3 +3,6 @@
 
 # all pycache
 __pycache__/
+
+# folders and zip files inside dataset
+dataset/**/*
