@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.applications  import (ResNet50, MobileNetV2) 
 from tensorflow.keras.layers import (
     AveragePooling2D,
     Conv2D,
@@ -11,6 +11,7 @@ from tensorflow.keras.layers import (
     Rescaling,
 )
 from tensorflow.keras.models import Sequential
+from kerastuner import HyperModel
 
 
 def create_mlp_model(input_shape: Tuple[int, int, int], num_classes: int) -> Sequential:
@@ -177,3 +178,65 @@ def create_resnet50_model(
     print(model.summary())
 
     return model
+
+def create_mobilenetv2_model(
+    input_shape: Tuple[int, int, int], num_classes: int
+) -> Sequential:
+    """
+    Function to create a convolutional neural network model based on MobileNetV2
+    architecture with transfer learning.
+
+    Args:
+        input_shape (Tuple[int, int, int]): The shape of the input data.
+        num_classes (int): The number of output classes.
+
+    Returns:
+        A Sequential model object.
+    """
+    # Create MobileNetV2 model for transfer learning (fine-tuning).
+    # Use `tensorflow.keras.applications.MobileNetV2()` and make sure to:
+    #   1. Use "imagenet" weights
+    #   2. Don't include the classification layer (include_top=False)
+    #   3. Define model input_shape equals to this function input_shape
+    # TODO
+    mobilenet = MobileNetV2(weights="imagenet", include_top=False, input_shape=input_shape)
+
+    # You shouldn't change the code below
+    # Freeze all layers in the MobileNetV2 model
+    for layer in mobilenet.layers:
+        layer.trainable = False
+
+    # Define the model
+    model = Sequential()
+
+    # Add the mobilenet model to the Sequential model.
+    # We don't need to add Input or Rescaling layers to the model because
+    # MobileNetV2 model already have hose layers inside.
+    model.add(mobilenet)
+
+    # Add a flatten layer to convert the output of the model to a 1D array
+    model.add(Flatten())
+
+    # Add a dropout layer with to avoid over-fitting
+    model.add(Dropout(0.5))
+
+    # Add a classification layer with num_classes output units,
+    # followed by a softmax activation function
+    model.add(Dense(num_classes, activation="softmax"))
+
+    # Print a summary of the model architecture
+    print(model.summary())
+
+    return model
+
+class MobileNetV2HyperModel(HyperModel):
+    def __init__(self, input_shape, num_classes):
+        self.input_shape = input_shape
+        self.num_classes = num_classes
+
+    def build(self, hp):
+        model = create_mobilenetv2_model(self.input_shape, self.num_classes)
+        model.compile(optimizer=hp.Choice('optimizer', values=['adam', 'sgd']),
+                      loss='categorical_crossentropy',
+                      metrics=['accuracy'])
+        return model

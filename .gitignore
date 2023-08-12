@@ -6,3 +6,6 @@ __pycache__/
 
 # folders and zip files inside dataset
 dataset/**/*
+
+# mobile_net_tunning
+mobile_net_tuning
