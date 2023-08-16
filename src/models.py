@@ -1,6 +1,8 @@
 from typing import Tuple
 
-from tensorflow.keras.applications  import (ResNet50, MobileNetV2) 
+from keras_tuner import HyperModel
+from tensorflow.keras import layers, optimizers
+from tensorflow.keras.applications import ResNet50
 from tensorflow.keras.layers import (
     AveragePooling2D,
     Conv2D,
@@ -11,7 +13,6 @@ from tensorflow.keras.layers import (
     Rescaling,
 )
 from tensorflow.keras.models import Sequential
-from kerastuner import HyperModel
 
 
 def create_mlp_model(input_shape: Tuple[int, int, int], num_classes: int) -> Sequential:
@@ -179,8 +180,9 @@ def create_resnet50_model(
 
     return model
 
-def create_mobilenetv2_model(
-    input_shape: Tuple[int, int, int], num_classes: int
+
+def create_resnet50_model_v2(
+    input_shape: Tuple[int, int, int], num_classes: int, dropout_rate: float = 0.5
 ) -> Sequential:
     """
     Function to create a convolutional neural network model based on MobileNetV2
@@ -199,11 +201,11 @@ def create_mobilenetv2_model(
     #   2. Don't include the classification layer (include_top=False)
     #   3. Define model input_shape equals to this function input_shape
     # TODO
-    mobilenet = MobileNetV2(weights="imagenet", include_top=False, input_shape=input_shape)
+    resnet = ResNet50(weights="imagenet", include_top=False, input_shape=input_shape)
 
     # You shouldn't change the code below
     # Freeze all layers in the MobileNetV2 model
-    for layer in mobilenet.layers:
+    for layer in resnet.layers:
         layer.trainable = False
 
     # Define the model
@@ -212,13 +214,13 @@ def create_mobilenetv2_model(
     # Add the mobilenet model to the Sequential model.
     # We don't need to add Input or Rescaling layers to the model because
     # MobileNetV2 model already have hose layers inside.
-    model.add(mobilenet)
+    model.add(resnet)
 
     # Add a flatten layer to convert the output of the model to a 1D array
     model.add(Flatten())
 
     # Add a dropout layer with to avoid over-fitting
-    model.add(Dropout(0.5))
+    model.add(Dropout(dropout_rate))
 
     # Add a classification layer with num_classes output units,
     # followed by a softmax activation function
@@ -229,14 +231,29 @@ def create_mobilenetv2_model(
 
     return model
 
-class MobileNetV2HyperModel(HyperModel):
+
+class ResNet50HyperModel(HyperModel):
     def __init__(self, input_shape, num_classes):
         self.input_shape = input_shape
         self.num_classes = num_classes
 
     def build(self, hp):
-        model = create_mobilenetv2_model(self.input_shape, self.num_classes)
-        model.compile(optimizer=hp.Choice('optimizer', values=['adam', 'sgd']),
-                      loss='categorical_crossentropy',
-                      metrics=['accuracy'])
+        model = Sequential()
+        model.add(Input(shape=self.input_shape))
+        model.add(layers.experimental.preprocessing.Rescaling(1.0 / 255))
+
+        # Add the dropout_rate as 0.5 because we already tested from 0.3 to 0.7 and 0.5 is the best
+        dropout_rate = 0.5
+        model = create_resnet50_model_v2(
+            self.input_shape, self.num_classes, dropout_rate
+        )
+
+        # Add the learning rate as a hyperparameter
+        learning_rate = hp.Choice("learning_rate", values=[5e-4, 1e-4])
+
+        model.compile(
+            optimizer=optimizers.Adam(learning_rate=learning_rate),
+            loss="categorical_crossentropy",
+            metrics=["accuracy"],
+        )
         return model
